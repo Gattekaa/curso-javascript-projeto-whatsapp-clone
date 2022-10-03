@@ -15,11 +15,63 @@ import { Upload } from '../util/Upload';
 export default class WhatsAppController {
 
     constructor() {
+        this._active = true;
         this._firebase = new Firebase();
         this.initAuth();
         this.elementsPrototype();
         this.loadElements();
         this.initEvents();
+        this.checkNotifications();
+    }
+
+    checkNotifications(){
+
+        if (typeof Notification === 'function') {
+
+            if (Notification.permission !== 'granted') {
+
+                this.el.alertNotificationPermission.show();
+
+            } else {
+                this.el.alertNotificationPermission.hide();
+            }
+
+            this.el.alertNotificationPermission.on('click', e=> {
+                Notification.requestPermission(permission=>{
+
+                    if (permission === 'granted') {
+
+                        this.el.alertNotificationPermission.hide();
+                        console.info('Notificação permitida')
+
+                    }
+
+                });
+            })
+
+        }
+
+    }
+
+    notification(data) {
+
+        if (Notification.permission === 'granted' && !this._active) {
+
+            let n = new Notification(this._contactActive.name, {
+                icon: this._contactActive.photo,
+                body: data.content
+            });
+
+            let sound = new Audio('./audio/alert.mp3');
+            sound.currentTime = 0;
+            sound.play();
+
+            setTimeout(()=> {
+                if (n) n.close();
+            }, 3000);
+
+        }
+
     }
 
     initAuth() {
@@ -107,7 +159,7 @@ export default class WhatsAppController {
                             <span dir="auto" title="${contact.name}" class="_1wjpf">${contact.name}</span>
                         </div>
                         <div class="_3Bxar">
-                            <span class="_3T2VG">${contact.lastMessageTime}</span>
+                            <span class="_3T2VG">${Format.timeStampToTime(contact.lastMessageTime)}</span>
                         </div>
                     </div>
                     <div class="_1AwDx">
@@ -182,6 +234,8 @@ export default class WhatsAppController {
 
         msContainer.innerHTML = '';
 
+        this._messagesReceived = [];
+
         Message.getRef(this._contactActive.chatId).orderBy('timeStamp').onSnapshot(docs=> {
 
 
@@ -200,6 +254,13 @@ export default class WhatsAppController {
                 message.fromJSON(data);
 
                 let me = (data.from === this._user.email);
+
+                if (!me && this._messagesReceived.filter(id => { return (id === data.id) }).length === 0) {
+
+                    this.notification(data);
+                    this._messagesReceived.push(data.id);
+
+                }
 
                 let view = message.getViewElement(me);
 
@@ -368,6 +429,17 @@ export default class WhatsAppController {
     }
 
     initEvents() {
+
+        window.addEventListener('focus', e=> {
+
+            this._active = true;
+
+        })
+        window.addEventListener('blur', e=> {
+
+            this._active = false;
+
+        })
 
         this.el.inputSearchContacts.on('keyup', e=> {
 
